@@ -17,5 +17,19 @@
                 <argument type="service" id="service_container"/>
             </call>
         </service>
+
+        <service id="SwagAdvancedSyncAPI\Service\PriceUpdateService">
+            <argument type="service" id="Shopware\Core\Framework\Api\Sync\SyncService"/>
+            <argument type="service" id="product.repository"/>
+            <argument type="service" id="Shopware\Core\Framework\Validation\DataValidator"/>
+            <argument type="service" id="Doctrine\DBAL\Connection"/>
+        </service>
+
+        <service id="SwagAdvancedSyncAPI\Api\PriceUpdateController" public="true">
+            <argument type="service" id="SwagAdvancedSyncAPI\Service\PriceUpdateService"/>
+            <call method="setContainer">
+                <argument type="service" id="service_container"/>
+            </call>
+        </service>
     </services>
 </container>

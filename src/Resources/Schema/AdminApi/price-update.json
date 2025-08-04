@@ -1,0 +1,587 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "SwagAdvancedSyncAPI - Price Update API",
+    "description": "API for updating product prices with advanced features including regular prices, advanced pricing rules, and selective updates.\n\nThis API allows updating prices for products by ID or product number, with support for:\n- Regular price updates (gross, net, linked, listPrice, regulationPrice)\n- Advanced pricing rules with quantity breaks and rule conditions\n- Selective updates (modify specific prices, keep others unchanged)\n- Multi-currency support with validation\n- Change detection to avoid unnecessary database operations\n- SyncService integration for atomic operations\n\nThe API uses Shopware's SyncService for reliable, transactional updates and supports selective advanced price management where individual price rules can be added, updated, or deleted independently.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Shopware Developer",
+      "url": "https://developer.shopware.com"
+    },
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "/api",
+      "description": "Admin API Server"
+    }
+  ],
+  "paths": {
+    "/_action/swag-advanced-sync/price-update": {
+      "post": {
+        "summary": "Update Product Prices",
+        "description": "Update regular and/or advanced prices for one or more products. Products can be identified by either ID or product number.\n\n**Features:**\n- Updates regular product prices with support for listPrice and regulationPrice\n- Manages advanced pricing rules (quantity breaks, rule-based pricing)\n- Selective updates - only modify prices that have actually changed\n- Multi-currency support with currency validation\n- Atomic operations using SyncService\n- Change detection to optimize database operations\n\n**Advanced Price Management:**\n- Add new pricing rules\n- Update existing pricing rules\n- Delete pricing rules (by omitting them from the request)\n- Preserve unchanged pricing rules",
+        "operationId": "updatePrices",
+        "tags": ["Bulk Operations"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["updates"],
+                "properties": {
+                  "updates": {
+                    "type": "array",
+                    "description": "Array of price update operations",
+                    "minItems": 1,
+                    "items": {
+                      "$ref": "#/components/schemas/PriceUpdateRequest"
+                    }
+                  }
+                }
+              },
+              "examples": {
+                "regular_price_update": {
+                  "summary": "Update regular product price",
+                  "value": {
+                    "updates": [
+                      {
+                        "id": "018f4b36-7a5b-7c5f-8e4d-123456789abc",
+                        "price": {
+                          "EUR": {
+                            "gross": 150.00,
+                            "net": 126.05,
+                            "linked": false,
+                            "listPrice": {
+                              "gross": 200.00,
+                              "net": 168.07
+                            },
+                            "regulationPrice": {
+                              "gross": 180.00,
+                              "net": 151.26
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                "advanced_prices_only": {
+                  "summary": "Update advanced pricing rules",
+                  "value": {
+                    "updates": [
+                      {
+                        "productNumber": "SW10001",
+                        "prices": [
+                          {
+                            "ruleId": "018f4b36-7a5b-7c5f-8e4d-rule1",
+                            "quantityStart": 1,
+                            "quantityEnd": 10,
+                            "price": {
+                              "EUR": {
+                                "gross": 95.00,
+                                "net": 79.83,
+                                "linked": false
+                              }
+                            }
+                          },
+                          {
+                            "ruleId": "018f4b36-7a5b-7c5f-8e4d-rule1",
+                            "quantityStart": 11,
+                            "price": {
+                              "EUR": {
+                                "gross": 90.00,
+                                "net": 75.63,
+                                "linked": false
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "combined_update": {
+                  "summary": "Update both regular and advanced prices",
+                  "value": {
+                    "updates": [
+                      {
+                        "id": "018f4b36-7a5b-7c5f-8e4d-123456789abc",
+                        "price": {
+                          "EUR": {
+                            "gross": 200.00,
+                            "net": 168.07
+                          }
+                        },
+                        "prices": [
+                          {
+                            "ruleId": "018f4b36-7a5b-7c5f-8e4d-rule2",
+                            "quantityStart": 5,
+                            "price": {
+                              "EUR": {
+                                "gross": 180.00,
+                                "net": 151.26
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "multicurrency_update": {
+                  "summary": "Update prices for multiple currencies",
+                  "value": {
+                    "updates": [
+                      {
+                        "id": "018f4b36-7a5b-7c5f-8e4d-123456789abc",
+                        "price": {
+                          "EUR": {
+                            "gross": 100.00,
+                            "net": 84.03
+                          },
+                          "USD": {
+                            "gross": 110.00,
+                            "net": 92.44
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Price updates completed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "object",
+                      "description": "Map of product IDs to update results",
+                      "additionalProperties": {
+                        "$ref": "#/components/schemas/PriceUpdateResult"
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "successful_updates": {
+                    "summary": "Successful price updates",
+                    "value": {
+                      "results": {
+                        "018f4b36-7a5b-7c5f-8e4d-123456789abc": {
+                          "updated": true
+                        },
+                        "018f4b36-7a5b-7c5f-8e4d-987654321def": {
+                          "updated": false,
+                          "reason": "No changes detected"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "PriceUpdateRequest": {
+        "type": "object",
+        "description": "Price update request for a single product",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Product ID (either id or productNumber must be provided)",
+            "example": "018f4b36-7a5b-7c5f-8e4d-123456789abc"
+          },
+          "productNumber": {
+            "type": "string",
+            "description": "Product number (either id or productNumber must be provided)",
+            "example": "SW10001"
+          },
+          "price": {
+            "type": "object",
+            "description": "Regular product prices by currency code",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PriceData"
+            },
+            "example": {
+              "EUR": {
+                "gross": 150.00,
+                "net": 126.05,
+                "linked": false
+              }
+            }
+          },
+          "prices": {
+            "type": "array",
+            "description": "Advanced pricing rules (quantity breaks, rule-based pricing)",
+            "items": {
+              "$ref": "#/components/schemas/AdvancedPriceData"
+            }
+          }
+        },
+        "anyOf": [
+          {"required": ["id"]},
+          {"required": ["productNumber"]}
+        ],
+        "anyOf": [
+          {"required": ["price"]},
+          {"required": ["prices"]}
+        ]
+      },
+      "PriceData": {
+        "type": "object",
+        "description": "Price data for a specific currency",
+        "required": ["gross", "net"],
+        "properties": {
+          "gross": {
+            "type": "number",
+            "description": "Gross price including taxes",
+            "example": 150.00
+          },
+          "net": {
+            "type": "number",
+            "description": "Net price excluding taxes",
+            "example": 126.05
+          },
+          "linked": {
+            "type": "boolean",
+            "description": "Whether net and gross prices are linked",
+            "default": false,
+            "example": false
+          },
+          "listPrice": {
+            "type": "object",
+            "description": "Optional list price (MSRP)",
+            "properties": {
+              "gross": {
+                "type": "number",
+                "description": "Gross list price",
+                "example": 200.00
+              },
+              "net": {
+                "type": "number",
+                "description": "Net list price",
+                "example": 168.07
+              },
+              "linked": {
+                "type": "boolean",
+                "description": "Whether list price net and gross are linked",
+                "default": false
+              }
+            },
+            "required": ["gross", "net"]
+          },
+          "regulationPrice": {
+            "type": "object",
+            "description": "Optional regulation price",
+            "properties": {
+              "gross": {
+                "type": "number",
+                "description": "Gross regulation price",
+                "example": 180.00
+              },
+              "net": {
+                "type": "number",
+                "description": "Net regulation price",
+                "example": 151.26
+              },
+              "linked": {
+                "type": "boolean",
+                "description": "Whether regulation price net and gross are linked",
+                "default": false
+              }
+            },
+            "required": ["gross", "net"]
+          }
+        }
+      },
+      "AdvancedPriceData": {
+        "type": "object",
+        "description": "Advanced pricing rule with quantity breaks and rule conditions",
+        "required": ["ruleId", "price"],
+        "properties": {
+          "ruleId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "ID of the pricing rule that determines when this price applies",
+            "example": "018f4b36-7a5b-7c5f-8e4d-rule1"
+          },
+          "quantityStart": {
+            "type": "integer",
+            "description": "Minimum quantity for this price to apply",
+            "minimum": 1,
+            "default": 1,
+            "example": 10
+          },
+          "quantityEnd": {
+            "type": "integer",
+            "description": "Maximum quantity for this price to apply (null for unlimited)",
+            "minimum": 1,
+            "nullable": true,
+            "example": 99
+          },
+          "price": {
+            "type": "object",
+            "description": "Price data by currency code",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PriceData"
+            },
+            "example": {
+              "EUR": {
+                "gross": 95.00,
+                "net": 79.83
+              }
+            }
+          }
+        }
+      },
+      "PriceUpdateResult": {
+        "type": "object",
+        "description": "Result of a price update operation",
+        "properties": {
+          "updated": {
+            "type": "boolean",
+            "description": "Whether any prices were actually updated",
+            "example": true
+          },
+          "reason": {
+            "type": "string",
+            "description": "Reason why no update occurred (when updated=false)",
+            "example": "No changes detected"
+          }
+        }
+      },
+      "ValidationError": {
+        "type": "object",
+        "description": "Validation error response",
+        "properties": {
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "description": "Error code",
+                  "example": "c1051bb4-d103-4f74-8988-acbcafc7fdc3"
+                },
+                "status": {
+                  "type": "string",
+                  "description": "HTTP status code",
+                  "example": "400"
+                },
+                "title": {
+                  "type": "string",
+                  "description": "Error title",
+                  "example": "This field is missing."
+                },
+                "detail": {
+                  "type": "string",
+                  "description": "Detailed error message",
+                  "example": "This field is missing."
+                },
+                "source": {
+                  "type": "object",
+                  "properties": {
+                    "pointer": {
+                      "type": "string",
+                      "description": "JSON pointer to the field that caused the error",
+                      "example": "/updates/0/price/EUR/gross"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "ValidationError": {
+        "description": "Validation error occurred",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "examples": {
+              "missing_price_data": {
+                "summary": "Missing price or advanced prices",
+                "value": {
+                  "errors": [
+                    {
+                      "code": "priceDataRequired",
+                      "status": "400",
+                      "title": "Either \"price\" or \"prices\" must be provided",
+                      "detail": "Either \"price\" or \"prices\" must be provided",
+                      "source": {
+                        "pointer": "/updates/0"
+                      }
+                    }
+                  ]
+                }
+              },
+              "missing_identifier": {
+                "summary": "Missing product identifier",
+                "value": {
+                  "errors": [
+                    {
+                      "code": "uniqueIdentifierNotGiven",
+                      "status": "400",
+                      "title": "Either \"id\" or \"productNumber\" must be provided",
+                      "detail": "Either \"id\" or \"productNumber\" must be provided",
+                      "source": {
+                        "pointer": "/updates/0"
+                      }
+                    }
+                  ]
+                }
+              },
+              "invalid_currency": {
+                "summary": "Invalid currency code",
+                "value": {
+                  "errors": [
+                    {
+                      "code": "FRAMEWORK__INVALID_CURRENCY",
+                      "status": "400",
+                      "title": "The currency with code INVALID cannot be found",
+                      "detail": "The currency with code INVALID cannot be found",
+                      "source": {
+                        "pointer": "/updates/0/price/INVALID"
+                      }
+                    }
+                  ]
+                }
+              },
+              "invalid_price_format": {
+                "summary": "Invalid price format",
+                "value": {
+                  "errors": [
+                    {
+                      "code": "c1051bb4-d103-4f74-8988-acbcafc7fdc3",
+                      "status": "400",
+                      "title": "This value should be of type numeric.",
+                      "detail": "This value should be of type numeric.",
+                      "source": {
+                        "pointer": "/updates/0/price/EUR/gross"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Authentication credentials are invalid or missing",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "errors": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "example": "FRAMEWORK__MISSING_AUTHORIZATION_HEADER"
+                      },
+                      "status": {
+                        "type": "string",
+                        "example": "401"
+                      },
+                      "title": {
+                        "type": "string",
+                        "example": "Unauthorized"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Insufficient permissions to perform this operation",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "errors": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "example": "FRAMEWORK__MISSING_PRIVILEGE"
+                      },
+                      "status": {
+                        "type": "string",
+                        "example": "403"
+                      },
+                      "title": {
+                        "type": "string",
+                        "example": "Forbidden"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT token obtained through the authentication endpoint.\nRequired scopes: Product write permissions."
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Price Management",
+      "description": "Operations for managing product prices and advanced pricing rules"
+    }
+  ]
+}

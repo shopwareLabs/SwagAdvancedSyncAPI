@@ -1,0 +1,385 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "SwagAdvancedSyncAPI - Stock Update API",
+    "description": "API for updating product stock levels with advanced features like threshold notifications and availability management.\n\nThis API allows updating stock levels for products by ID or product number, with support for:\n- Automatic availability flag updates based on stock levels\n- Threshold-based cache invalidation events\n- Product no longer available event dispatching\n- Parent product inheritance support (is_closeout, min_purchase)\n\nThe API operates only on the live version of products and uses COALESCE queries for efficient updates.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Shopware Developer",
+      "url": "https://developer.shopware.com"
+    },
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "/api",
+      "description": "Admin API Server"
+    }
+  ],
+  "paths": {
+    "/_action/swag-advanced-sync/stock-update": {
+      "post": {
+        "summary": "Update Product Stock",
+        "description": "Update stock levels for one or more products. Products can be identified by either ID or product number.\n\n**Features:**\n- Updates stock and availability flag in a single database transaction\n- Dispatches events for stock changes (ProductNoLongerAvailableEvent, InvalidateProductCache)\n- Supports threshold-based cache invalidation\n- Uses parent product fallback for availability calculation\n\n**Events Dispatched:**\n- `ProductNoLongerAvailableEvent`: When product becomes unavailable\n- `InvalidateProductCache`: When stock goes from ≤0 to >0 or exceeds threshold",
+        "operationId": "updateStock",
+        "tags": ["Bulk Operations"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["updates"],
+                "properties": {
+                  "updates": {
+                    "type": "array",
+                    "description": "Array of stock update operations",
+                    "minItems": 1,
+                    "items": {
+                      "$ref": "#/components/schemas/StockUpdateRequest"
+                    }
+                  }
+                }
+              },
+              "examples": {
+                "update_by_id": {
+                  "summary": "Update stock by product ID",
+                  "value": {
+                    "updates": [
+                      {
+                        "id": "018f4b36-7a5b-7c5f-8e4d-123456789abc",
+                        "stock": 50,
+                        "threshold": 10
+                      }
+                    ]
+                  }
+                },
+                "update_by_product_number": {
+                  "summary": "Update stock by product number",
+                  "value": {
+                    "updates": [
+                      {
+                        "productNumber": "SW10001",
+                        "stock": 25
+                      }
+                    ]
+                  }
+                },
+                "mixed_updates": {
+                  "summary": "Update multiple products with mixed identifiers",
+                  "value": {
+                    "updates": [
+                      {
+                        "id": "018f4b36-7a5b-7c5f-8e4d-123456789abc",
+                        "stock": 100
+                      },
+                      {
+                        "productNumber": "SW10002",
+                        "stock": 0
+                      },
+                      {
+                        "productNumber": "SW10003",
+                        "stock": 75,
+                        "threshold": 50
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stock updates completed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "object",
+                      "description": "Map of product IDs to update results",
+                      "additionalProperties": {
+                        "$ref": "#/components/schemas/StockUpdateResult"
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "successful_updates": {
+                    "summary": "Successful stock updates",
+                    "value": {
+                      "results": {
+                        "018f4b36-7a5b-7c5f-8e4d-123456789abc": {
+                          "oldStock": 10,
+                          "newStock": 50,
+                          "oldAvailable": false,
+                          "newAvailable": true
+                        },
+                        "018f4b36-7a5b-7c5f-8e4d-987654321def": {
+                          "oldStock": 25,
+                          "newStock": 0,
+                          "oldAvailable": true,
+                          "newAvailable": false
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "StockUpdateRequest": {
+        "type": "object",
+        "description": "Stock update request for a single product",
+        "required": ["stock"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Product ID (either id or productNumber must be provided)",
+            "example": "018f4b36-7a5b-7c5f-8e4d-123456789abc"
+          },
+          "productNumber": {
+            "type": "string",
+            "description": "Product number (either id or productNumber must be provided)",
+            "example": "SW10001"
+          },
+          "stock": {
+            "type": "integer",
+            "description": "New stock level for the product",
+            "example": 50
+          },
+          "threshold": {
+            "type": "integer",
+            "description": "Optional threshold for cache invalidation. When stock exceeds this threshold, an InvalidateProductCache event will be dispatched.",
+            "minimum": 0,
+            "example": 10
+          }
+        },
+        "anyOf": [
+          {"required": ["id"]},
+          {"required": ["productNumber"]}
+        ]
+      },
+      "StockUpdateResult": {
+        "type": "object",
+        "description": "Result of a stock update operation",
+        "properties": {
+          "oldStock": {
+            "type": "integer",
+            "description": "Previous stock level",
+            "example": 10
+          },
+          "newStock": {
+            "type": "integer",
+            "description": "New stock level",
+            "example": 50
+          },
+          "oldAvailable": {
+            "type": "boolean",
+            "description": "Previous availability status",
+            "example": false
+          },
+          "newAvailable": {
+            "type": "boolean",
+            "description": "New availability status",
+            "example": true
+          }
+        }
+      },
+      "ValidationError": {
+        "type": "object",
+        "description": "Validation error response",
+        "properties": {
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "description": "Error code",
+                  "example": "c1051bb4-d103-4f74-8988-acbcafc7fdc3"
+                },
+                "status": {
+                  "type": "string",
+                  "description": "HTTP status code",
+                  "example": "400"
+                },
+                "title": {
+                  "type": "string",
+                  "description": "Error title",
+                  "example": "This field is missing."
+                },
+                "detail": {
+                  "type": "string",
+                  "description": "Detailed error message",
+                  "example": "This field is missing."
+                },
+                "source": {
+                  "type": "object",
+                  "properties": {
+                    "pointer": {
+                      "type": "string",
+                      "description": "JSON pointer to the field that caused the error",
+                      "example": "/updates/0/stock"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "ValidationError": {
+        "description": "Validation error occurred",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "examples": {
+              "missing_stock": {
+                "summary": "Missing required stock field",
+                "value": {
+                  "errors": [
+                    {
+                      "code": "c1051bb4-d103-4f74-8988-acbcafc7fdc3",
+                      "status": "400",
+                      "title": "This field is missing.",
+                      "detail": "This field is missing.",
+                      "source": {
+                        "pointer": "/updates/0/stock"
+                      }
+                    }
+                  ]
+                }
+              },
+              "missing_identifier": {
+                "summary": "Missing product identifier",
+                "value": {
+                  "errors": [
+                    {
+                      "code": "uniqueIdentifierNotGiven",
+                      "status": "400",
+                      "title": "Either \"id\" or \"productNumber\" must be provided",
+                      "detail": "Either \"id\" or \"productNumber\" must be provided",
+                      "source": {
+                        "pointer": "/updates/0"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Authentication credentials are invalid or missing",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "errors": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "example": "FRAMEWORK__MISSING_AUTHORIZATION_HEADER"
+                      },
+                      "status": {
+                        "type": "string",
+                        "example": "401"
+                      },
+                      "title": {
+                        "type": "string",
+                        "example": "Unauthorized"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Insufficient permissions to perform this operation",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "errors": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "example": "FRAMEWORK__MISSING_PRIVILEGE"
+                      },
+                      "status": {
+                        "type": "string",
+                        "example": "403"
+                      },
+                      "title": {
+                        "type": "string",
+                        "example": "Forbidden"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT token obtained through the authentication endpoint.\nRequired scopes: Product write permissions."
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Stock Management",
+      "description": "Operations for managing product stock levels"
+    }
+  ]
+}

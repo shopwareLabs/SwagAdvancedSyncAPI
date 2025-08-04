@@ -1,0 +1,32 @@
+name: PHP
+
+on:
+    push:
+        branches:
+            - main
+    pull_request:
+    workflow_dispatch:
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+
+        name: PHPUnit
+
+        steps:
+            -   name: Setup Shopware
+                uses: shopware/setup-shopware@v2
+                with:
+                    shopware-version: v6.6.10.6
+                    php-version: 8.2
+                    install: 'false'
+
+            -   name: Checkout plugin
+                uses: actions/checkout@v4
+                with:
+                    path: custom/plugins/SwagAdvancedSyncAPI
+
+            -   name: Run PHPUnit tests
+                run: |
+                    cd custom/plugins/SwagAdvancedSyncAPI
+                    php ../../../vendor/bin/phpunit -c phpunit.xml.dist
