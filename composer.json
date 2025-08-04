@@ -1,0 +1,31 @@
+{
+    "name": "swag/advanced-sync-api",
+    "description": "Advanced Sync API for Shopware with stock management capabilities",
+    "type": "shopware-platform-plugin",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "shopware AG"
+        }
+    ],
+    "require": {
+        "shopware/core": "~6.6.6 || ~6.7.0"
+    },
+    "extra": {
+        "shopware-plugin-class": "SwagAdvancedSyncAPI\\SwagAdvancedSyncAPI",
+        "label": {
+            "de-DE": "Erweiterte Sync API",
+            "en-GB": "Advanced Sync API"
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "SwagAdvancedSyncAPI\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SwagAdvancedSyncAPI\\Tests\\": "tests/"
+        }
+    }
+}
