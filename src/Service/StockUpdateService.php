@@ -58,12 +58,32 @@ class StockUpdateService
             }
         }
 
-        // Fetch current stock for all products
-        $currentStocks = $this->connection->fetchAllKeyValue(
-            'SELECT LOWER(HEX(id)), stock FROM product WHERE id IN (:ids) AND version_id = :version',
+        // Fetch all required fields for availability calculation in one query
+        $currentProductData = $this->connection->fetchAllAssociative(
+            'SELECT 
+                LOWER(HEX(product.id)) as id, 
+                product.stock, 
+                product.available,
+                COALESCE(product.is_closeout, parent.is_closeout, 0) as is_closeout,
+                COALESCE(product.min_purchase, parent.min_purchase, 1) as min_purchase
+            FROM product 
+            LEFT JOIN product parent 
+                ON parent.id = product.parent_id 
+                AND parent.version_id = product.version_id
+            WHERE product.id IN (:ids) AND product.version_id = :version',
             ['ids' => Uuid::fromHexToBytesList($productIds), 'version' => $versionId],
             ['ids' => ArrayParameterType::BINARY]
         );
+        
+        $productInfo = [];
+        foreach ($currentProductData as $data) {
+            $productInfo[$data['id']] = [
+                'stock' => (int) $data['stock'],
+                'available' => (bool) $data['available'],
+                'is_closeout' => (bool) $data['is_closeout'],
+                'min_purchase' => (int) $data['min_purchase'],
+            ];
+        }
 
         $noLongerAvailableIds = [];
         $nowAvailableIds = [];
@@ -81,39 +101,52 @@ class StockUpdateService
                 $productId = $productNumberToId[$update['productNumber']];
             }
 
-            if (!$productId || !isset($currentStocks[$productId])) {
+            if (!$productId || !isset($productInfo[$productId])) {
                 continue;
             }
 
-            $oldStock = (int) $currentStocks[$productId];
+            $info = $productInfo[$productId];
+            $oldStock = $info['stock'];
             $newStock = (int) $update['stock'];
 
             if ($oldStock === $newStock) {
                 continue;
             }
 
-            // Update the stock
+            // Calculate new availability based on stock, closeout and min_purchase
+            $isCloseout = (bool) $info['is_closeout'];
+            $minPurchase = (int) $info['min_purchase'];
+            $newAvailable = $isCloseout ? ($newStock >= $minPurchase) : true;
+
+            // Update both stock and available flag
             $this->connection->update(
                 'product',
-                ['stock' => $newStock],
+                [
+                    'stock' => $newStock,
+                    'available' => $newAvailable ? 1 : 0,
+                ],
                 ['id' => Uuid::fromHexToBytes($productId), 'version_id' => $versionId]
             );
 
+            $oldAvailable = $info['available'];
+            
             $results[$productId] = [
                 'oldStock' => $oldStock,
                 'newStock' => $newStock,
+                'oldAvailable' => $oldAvailable,
+                'newAvailable' => $newAvailable,
             ];
 
             // Check if product is no longer available (was available, now not)
-            if ($oldStock > 0 && $newStock <= 0) {
+            if ($oldAvailable && !$newAvailable) {
                 $noLongerAvailableIds[] = $productId;
             }
 
             // Check if product became available (was not available, now available)
-            if ($oldStock <= 0 && $newStock > 0) {
+            if (!$oldAvailable && $newAvailable) {
                 $nowAvailableIds[] = $productId;
             }
-            
+
             // Check if stock exceeded threshold (if threshold was provided)
             if (isset($update['threshold'])) {
                 $threshold = (int) $update['threshold'];
@@ -138,7 +171,7 @@ class StockUpdateService
                 new InvalidateProductCache($nowAvailableIds)
             );
         }
-        
+
         // Dispatch event for products that exceeded threshold (cache invalidation)
         if (!empty($thresholdExceededIds)) {
             $this->eventDispatcher->dispatch(
