@@ -45,9 +45,11 @@ class PriceUpdateService
 
         // Collect all product IDs for batch fetching
         $productIds = array_column($resolvedUpdates, 'id');
-        
+
         // Fetch all products at once
         $currentProducts = $this->getCurrentProducts($productIds, $context);
+
+        $syncOps = [];
 
         // Process each update
         foreach ($resolvedUpdates as $update) {
@@ -63,7 +65,10 @@ class PriceUpdateService
             $syncOperations = $this->prepareSyncOperations($productId, $update, $currentProduct);
 
             if (!empty($syncOperations)) {
-                $this->syncService->sync($syncOperations, $context, new SyncBehavior());
+                foreach ($syncOperations as $operation) {
+                    $syncOps[] = $operation;
+                }
+
                 $results[$productId] = [
                     'updated' => true,
                 ];
@@ -74,6 +79,8 @@ class PriceUpdateService
                 ];
             }
         }
+
+        $this->syncService->sync($syncOps, $context, new SyncBehavior());
 
         return $results;
     }
@@ -102,7 +109,7 @@ class PriceUpdateService
         if (!empty($productNumberToId)) {
             $productNumbers = array_keys($productNumberToId);
             $versionId = Uuid::fromHexToBytes($context->getVersionId());
-            
+
             $productResults = $this->connection->fetchAllAssociative(
                 'SELECT LOWER(HEX(id)) as id, product_number FROM product WHERE product_number IN (:productNumbers) AND version_id = :version',
                 [
@@ -117,7 +124,7 @@ class PriceUpdateService
             foreach ($productResults as $productResult) {
                 $productNumber = $productResult['product_number'];
                 $productId = $productResult['id'];
-                
+
                 if (isset($productNumberToId[$productNumber])) {
                     $update = $productNumberToId[$productNumber];
                     $update['id'] = $productId;
@@ -176,7 +183,7 @@ class PriceUpdateService
                     'fields' => [
                         'id' => new Optional([new Type('string'), new NotBlank()]),
                         'productNumber' => new Optional([new Type('string'), new NotBlank()]),
-                        'price' => new Optional([new All([new Required(), $price])]),
+                        'price' => new All([new Required(), $price]),
                         'prices' => new Optional(
                             new All([
                                 new Collection([
@@ -200,7 +207,7 @@ class PriceUpdateService
                             ->atPath('updates/' . $context->getPropertyPath())
                             ->addViolation();
                     }
-                    
+
                     if (!isset($value['price']) && !isset($value['prices'])) {
                         $context->buildViolation('Either "price" or "prices" must be provided')
                             ->setCode('priceDataRequired')
@@ -270,7 +277,7 @@ class PriceUpdateService
     private function processPriceData(array $priceData, array $currencies): array
     {
         $processedPrices = [];
-        
+
         foreach ($priceData as $key => $price) {
             $newPrice = $price + ['currencyId' => $currencies[$key]];
 
@@ -293,7 +300,7 @@ class PriceUpdateService
 
             $processedPrices[$currencies[$key]] = $newPrice;
         }
-        
+
         return $processedPrices;
     }
 
@@ -315,7 +322,7 @@ class PriceUpdateService
 
         foreach ($products as $product) {
             $productId = $product->getId();
-            
+
             // Get current advanced prices
             $prices = [];
             if ($product->get('prices')) {
@@ -407,20 +414,20 @@ class PriceUpdateService
     private function getAdvancedPriceOperations(array $newAdvancedPrices, array $currentAdvancedPrices, string $productId): array
     {
         $operations = [];
-        
+
         // Create indexes for faster lookup
         $currentPricesIndex = [];
         foreach ($currentAdvancedPrices as $currentPrice) {
             $key = $currentPrice['ruleId'] . '_' . $currentPrice['quantityStart'] . '_' . ($currentPrice['quantityEnd'] ?? 'null');
             $currentPricesIndex[$key] = $currentPrice;
         }
-        
+
         $newPricesIndex = [];
         foreach ($newAdvancedPrices as $newPrice) {
             $key = $newPrice['ruleId'] . '_' . $newPrice['quantityStart'] . '_' . ($newPrice['quantityEnd'] ?? 'null');
             $newPricesIndex[$key] = $newPrice;
         }
-        
+
         // Find prices to delete (exist in current but not in new)
         $deleteIds = [];
         foreach ($currentPricesIndex as $key => $currentPrice) {
@@ -428,7 +435,7 @@ class PriceUpdateService
                 $deleteIds[] = ['id' => $currentPrice['id']];
             }
         }
-        
+
         if (!empty($deleteIds)) {
             $operations[] = new SyncOperation(
                 'product-price-delete',
@@ -437,12 +444,12 @@ class PriceUpdateService
                 $deleteIds
             );
         }
-        
+
         // Find prices to create/update
         $upsertPrices = [];
         foreach ($newPricesIndex as $key => $newPrice) {
             $currentPrice = $currentPricesIndex[$key] ?? null;
-            
+
             if (!$currentPrice) {
                 // New price - create
                 $upsertPrices[] = [
@@ -460,14 +467,14 @@ class PriceUpdateService
                     'quantityEnd' => $newPrice['quantityEnd'] ?? null,
                     'price' => $newPrice['price']
                 ];
-                
+
                 $currentPriceComparable = [
                     'ruleId' => $currentPrice['ruleId'],
                     'quantityStart' => $currentPrice['quantityStart'],
                     'quantityEnd' => $currentPrice['quantityEnd'],
                     'price' => $currentPrice['price']
                 ];
-                
+
                 if ($this->arrayDeepDiff($newPriceComparable, $currentPriceComparable) !== []) {
                     // Price changed - update
                     $upsertPrices[] = [
@@ -481,7 +488,7 @@ class PriceUpdateService
                 }
             }
         }
-        
+
         if (!empty($upsertPrices)) {
             $operations[] = new SyncOperation(
                 'product-price-upsert',
@@ -490,7 +497,7 @@ class PriceUpdateService
                 $upsertPrices
             );
         }
-        
+
         return $operations;
     }
 

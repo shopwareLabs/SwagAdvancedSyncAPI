@@ -87,6 +87,12 @@ class PriceUpdateServiceTest extends TestCase
             'updates' => [
                 [
                     'id' => $this->productId,
+                    'price' => [
+                        'EUR' => [
+                            'gross' => 100.00,
+                            'net' => 84.03,
+                        ],
+                    ],
                     'prices' => [
                         [
                             'ruleId' => $this->ruleId,
@@ -169,6 +175,12 @@ class PriceUpdateServiceTest extends TestCase
             'updates' => [
                 [
                     'id' => $this->productId,
+                    'price' => [
+                        'EUR' => [
+                            'gross' => 100.00,
+                            'net' => 84.03,
+                        ],
+                    ],
                     'prices' => [
                         [
                             'ruleId' => $this->ruleId,
@@ -261,6 +273,12 @@ class PriceUpdateServiceTest extends TestCase
             'updates' => [
                 [
                     'id' => $this->productId,
+                    'price' => [
+                        'EUR' => [
+                            'gross' => 100.00,
+                            'net' => 84.03,
+                        ],
+                    ],
                     'prices' => [],
                 ]
             ]
@@ -297,6 +315,12 @@ class PriceUpdateServiceTest extends TestCase
             'updates' => [
                 [
                     'id' => $this->productId,
+                    'price' => [
+                        'EUR' => [
+                            'gross' => 100.00,
+                            'net' => 84.03,
+                        ],
+                    ],
                     'prices' => [
                         [
                             'ruleId' => $this->ruleId,
@@ -373,6 +397,12 @@ class PriceUpdateServiceTest extends TestCase
             'updates' => [
                 [
                     'id' => $this->productId,
+                    'price' => [
+                        'EUR' => [
+                            'gross' => 100.00,
+                            'net' => 84.03,
+                        ],
+                    ],
                     'prices' => [
                         [
                             'ruleId' => $this->ruleId,

@@ -246,12 +246,8 @@
           }
         },
         "anyOf": [
-          {"required": ["id"]},
-          {"required": ["productNumber"]}
-        ],
-        "anyOf": [
-          {"required": ["price"]},
-          {"required": ["prices"]}
+          {"required": ["id", "price"]},
+          {"required": ["productNumber", "price"]}
         ]
       },
       "PriceData": {
