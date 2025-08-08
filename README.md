@@ -96,7 +96,7 @@ Update product prices with complete synchronization support using the SyncServic
           }
         }
       },
-      "advancedPrices": [
+      "prices": [
         {
           "ruleId": "rule-uuid",
           "quantityStart": 1,
@@ -128,8 +128,8 @@ Update product prices with complete synchronization support using the SyncServic
 
 - `updates` (array, required): Array of price update objects
   - `id` (string, required): Product UUID
-  - `price` (object, optional): Main product price by currency
-  - `advancedPrices` (array, optional): Rule-based advanced pricing
+  - `price` (object): Main product price by currency
+  - `prices` (array, optional): Rule-based advanced pricing
 
 **Note**: Either `price` or `advancedPrices` must be provided for each update. Advanced prices are completely replaced (not merged).
 
