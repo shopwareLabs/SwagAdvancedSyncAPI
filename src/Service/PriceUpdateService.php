@@ -4,6 +4,7 @@ namespace SwagAdvancedSyncAPI\Service;
 
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Shopware\Core\Content\Product\DataAbstractionLayer\ProductIndexer;
 use Shopware\Core\Framework\Uuid\Uuid;
 use Shopware\Core\Framework\Api\Sync\SyncBehavior;
 use Shopware\Core\Framework\Api\Sync\SyncOperation;
@@ -80,7 +81,17 @@ class PriceUpdateService
             }
         }
 
-        $this->syncService->sync($syncOps, $context, new SyncBehavior());
+        $this->syncService->sync($syncOps, $context, new SyncBehavior(null, [
+            ProductIndexer::CATEGORY_DENORMALIZER_UPDATER,
+            ProductIndexer::CHILD_COUNT_UPDATER,
+            ProductIndexer::INHERITANCE_UPDATER,
+            ProductIndexer::MANY_TO_MANY_ID_FIELD_UPDATER,
+            ProductIndexer::RATING_AVERAGE_UPDATER,
+            ProductIndexer::STOCK_UPDATER,
+            ProductIndexer::SEARCH_KEYWORD_UPDATER,
+            ProductIndexer::STREAM_UPDATER,
+            ProductIndexer::VARIANT_LISTING_UPDATER,
+        ]));
 
         return $results;
     }
