@@ -123,6 +123,7 @@ class StockUpdateService
                 'product',
                 [
                     'stock' => $newStock,
+                    'available_stock' => $newStock,
                     'available' => $newAvailable ? 1 : 0,
                 ],
                 ['id' => Uuid::fromHexToBytes($productId), 'version_id' => $versionId]
