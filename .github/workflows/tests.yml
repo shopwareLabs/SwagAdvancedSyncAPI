@@ -20,6 +20,7 @@ jobs:
                     shopware-version: v6.6.10.6
                     php-version: 8.2
                     install: 'false'
+                    allow-insecure-versions: 'true'
 
             -   name: Checkout plugin
                 uses: actions/checkout@v4
